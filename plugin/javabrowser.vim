@@ -1,9 +1,12 @@
 " File: JavaBrowser.vim
 " Author: Pradeep Unde (pradeep_unde AT yahoo DOT com)
-" Version: l.15
-" Last Modified: Sep 08, 2003
+" Version: l.16
+" Last Modified: Sep 17, 2003
 "
 " ChangeLog:
+" Version 1.16:
+" 1. Added tagindicator.bmp for windows. Vim on Windows does not understand
+" the xpms. Arrgghhh!
 " Version 1.15:
 " 1. Added various configurable ways to highlight current tag which include
 " A. an icon or B. an arrow(=>) with highlight of Constant and/or C. normal
@@ -413,7 +416,11 @@ endif
 
 " Check and define signs, if required
 if g:JavaBrowser_Use_Icon == 1
-    exe 'sign define currTag icon=' . expand('$VIM') . '/pixmaps/tagindicator.xpm text==> texthl=Constant'
+    let imgName = 'tagindicator.xpm'
+    if has('win32')
+        let imgName = 'tagindicator.bmp'
+    endif
+    exe 'sign define currTag icon=' . expand('$VIM') . '/pixmaps/' . imgName . ' text==> texthl=Constant'
 else
     if g:JavaBrowser_Use_Text_Icon == 1
         exe 'sign define currTag text==> texthl=Constant'
@@ -862,7 +869,7 @@ function! s:JavaBrowser_Init_Window(bufnum)
         " Display the tag prototype for the tag under the cursor.
         autocmd CursorHold __JBrowser_List__ call s:JavaBrowser_Show_Tag_Prototype()
         " Highlight the current tag 
-        autocmd CursorHold * silent call s:JavaBrowser_Highlight_Tag(bufnr('%'), 
+        autocmd CursorHold *.java silent call s:JavaBrowser_Highlight_Tag(bufnr('%'), 
                                        \ line('.'))
         " Unlighlight the previous search
         autocmd CursorHold *.java call s:JavaBrowser_Unhighlight_Prvline()
