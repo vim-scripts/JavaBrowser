@@ -1,9 +1,12 @@
 " File: JavaBrowser.vim
 " Author: Pradeep Unde (pradeep_unde AT yahoo DOT com)
-" Version: l.17
-" Last Modified: Sep 19, 2003
+" Version: l.18
+" Last Modified: Nov 18, 2003
 "
 " ChangeLog:
+" Version 1.18:
+" 1. Bug fix when sorted by name. Fixed the tag position. Now it shows the
+" arrow at correct position.
 " Version 1.17:
 " 1. Optimized so that when the cursor moves within a method/function, the tag
 " is not rehighlighted, reducing the flicker on the screen.
@@ -1235,6 +1238,9 @@ function! s:JavaBrowser_Explore_File(bufnum)
 
     " Mark the buffer as modifiable
     setlocal modifiable
+
+    " Clear the previous buffer to JBrowser line mapping
+    call s:JavaBrowser_Clear_Buf_To_JBrowser_Map()
     let b:buf_to_jbrowser_line_nos = ''
 
     let i = 1
@@ -1706,21 +1712,44 @@ function! s:JavaBrowser_Highlight_Tag(buf_no, linenum)
 
     let l:all_line_nos = b:buf_to_jbrowser_line_nos
     let l:buf_lineno = -1
-    let l:prv_line_no = -1
-    while l:all_line_nos != ''
-        let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
-        " Remove the line
-        let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
-        if l:line_no == a:linenum
-            let l:buf_lineno = l:line_no
-            break
+    if b:jbrowser_sort_type == 'order'
+        let l:prv_line_no = -1
+        while l:all_line_nos != ''
+            let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
+            " Remove the line
+            let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
+            if l:line_no == a:linenum
+                let l:buf_lineno = l:line_no
+                break
+            endif
+            if l:line_no > a:linenum
+                let l:buf_lineno = l:prv_line_no
+                break
+            endif
+            let l:prv_line_no = l:line_no
+        endwhile
+    else
+        let l:nearest_line_offset = -1
+        while l:all_line_nos != ''
+            let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
+            " Remove the line
+            let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
+            if l:line_no == a:linenum
+                let l:buf_lineno = l:line_no
+                break
+            endif
+            if l:line_no < a:linenum
+                let l:curr_diff = a:linenum - l:line_no
+                if l:nearest_line_offset == -1 || l:curr_diff < l:nearest_line_offset
+                    let l:nearest_line_offset = l:curr_diff
+                endif
+            endif
+        endwhile
+        if l:buf_lineno == -1
+            let l:buf_lineno = a:linenum - l:nearest_line_offset
         endif
-        if l:line_no > a:linenum
-            let l:buf_lineno = l:prv_line_no
-            break
-        endif
-        let l:prv_line_no = l:line_no
-    endwhile
+    endif
+
     if l:buf_lineno == -1
         if l:prv_line_no != -1
             let l:buf_lineno = l:prv_line_no
@@ -1744,6 +1773,35 @@ function! s:JavaBrowser_Highlight_Tag(buf_no, linenum)
         " Jump to the Java source window
         exe l:winnum . 'wincmd w'
     endif
+endfunction
+    
+" JavaBrowser_Clear_Buf_To_JBrowser_Map
+" Clear previous java buffer to JBrowser line map
+function! s:JavaBrowser_Clear_Buf_To_JBrowser_Map()
+    " JavaBrowser window name
+    let l:bname = '__JBrowser_List__'
+
+    " Check if the JavaBrowser window is open
+    let l:winnum = bufwinnr(l:bname)
+    if l:winnum == -1
+        return
+    endif
+    " Jump to the JavaBrowser window
+    exe l:winnum . 'wincmd w'
+   
+    if !exists('b:buf_to_jbrowser_line_nos')
+        return
+    endif
+    let l:all_line_nos = b:buf_to_jbrowser_line_nos
+    while l:all_line_nos != ''
+        let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
+        " Remove the line
+        let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
+        let l:varname = 'b:buf_to_jbrowser_line_no_' . l:line_no
+        if exists(l:varname)
+            unlet! b:buf_to_jbrowser_line_no_{l:line_no}
+        endif
+    endwhile
 endfunction
 
 " Define tag listing autocommand to automatically open the taglist window on
