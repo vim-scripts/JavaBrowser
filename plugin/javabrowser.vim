@@ -1,9 +1,16 @@
 " File: JavaBrowser.vim
 " Author: Pradeep Unde (pradeep_unde AT yahoo DOT com)
-" Version: l.14
-" Last Modified: Sep 04, 2003
+" Version: l.15
+" Last Modified: Sep 08, 2003
 "
 " ChangeLog:
+" Version 1.15:
+" 1. Added various configurable ways to highlight current tag which include
+" A. an icon or B. an arrow(=>) with highlight of Constant and/or C. normal
+" search highlight
+" 2. Added options to control all these. Added 'JavaBrowser_Use_Icon',
+" 'JavaBrowser_Use_Text_Icon' and 'JavaBrowser_Use_Highlight_Tag'
+" 3. All have default values
 " Version 1.14:
 " 1. Now automatically highlights the current tag name.
 " Version 1.13:
@@ -381,8 +388,39 @@ if !exists('JavaBrowser_Compact_Format')
     let JavaBrowser_Compact_Format = 0
 endif
 
+" Use tagindicator (an arrow) icon to show the current tag
+if !exists('JavaBrowser_Use_Icon')
+    let JavaBrowser_Use_Icon = 0
+endif
+
+" Use a text simulated arrow (=>) to show the current tag
+if JavaBrowser_Use_Icon == 0 && !exists('JavaBrowser_Use_Text_Icon')
+    let JavaBrowser_Use_Text_Icon = 1
+endif
+
+" Use a highlight to show the current tag
+if !exists('JavaBrowser_Use_Highlight_Tag')
+    let JavaBrowser_Use_Highlight_Tag = 0
+endif
+
+" Check if vim has been compiled with the signs feature or not
+" if not, we enable the highlight tag at least to show current tag
+if !has('signs')
+    let JavaBrowser_Use_Icon = 0
+    let JavaBrowser_Use_Text_Icon = 0
+    let JavaBrowser_Use_Highlight_Tag = 1
+endif
+
+" Check and define signs, if required
+if g:JavaBrowser_Use_Icon == 1
+    exe 'sign define currTag icon=' . expand('$VIM') . '/pixmaps/tagindicator.xpm text==> texthl=Constant'
+else
+    if g:JavaBrowser_Use_Text_Icon == 1
+        exe 'sign define currTag text==> texthl=Constant'
+    endif
+endif
+
 " File types supported by taglist
-"let s:jbrowser_file_types = 'cpp java php python ruby'
 let s:jbrowser_file_types = 'java'
 if exists('g:jbrowser_file_types')
     " Add user specified file types
@@ -826,6 +864,8 @@ function! s:JavaBrowser_Init_Window(bufnum)
         " Highlight the current tag 
         autocmd CursorHold * silent call s:JavaBrowser_Highlight_Tag(bufnr('%'), 
                                        \ line('.'))
+        " Unlighlight the previous search
+        autocmd CursorHold *.java call s:JavaBrowser_Unhighlight_Prvline()
         " Adjust the Vim window width when taglist window is closed
         autocmd BufUnload __JBrowser_List__ call <SID>JavaBrowser_Close_Window()
         " Auto refresh the taglisting window
@@ -1500,14 +1540,34 @@ function! s:JavaBrowser_Update_Window()
 endfunction
 
 function! s:JavaBrowser_Highlight_Tagline()
-    " Clear previously selected name
-    match none
+    if g:JavaBrowser_Use_Highlight_Tag == 1
+        " Clear previously selected name
+        match none
 
-    " Highlight the current selected name
-    if g:JavaBrowser_Display_Prototype == 0
-        exe 'match TagName /\%' . line('.') . 'l\s\+\zs.*/'
-    else
-        exe 'match TagName /\%' . line('.') . 'l.*/'
+        " Highlight the current selected name
+        if g:JavaBrowser_Display_Prototype == 0
+            exe 'match TagName /\%' . line('.') . 'l\s\+\zs.*/'
+        else
+            exe 'match TagName /\%' . line('.') . 'l.*/'
+        endif
+    endif
+
+    " Place the current tag sign if required, clearing the previous
+    if g:JavaBrowser_Use_Icon == 1 || g:JavaBrowser_Use_Text_Icon == 1
+        exe 'sign unplace 2 buffer=' . bufnr('%')
+        exe 'sign place 2 line=' . line('.') . ' name=currTag buffer=' . bufnr('%')
+    endif
+endfunction
+
+function! s:JavaBrowser_Unhighlight_Prvline()
+    " Clear previously selected name
+    if g:JavaBrowser_Use_Highlight_Tag == 1
+        match none
+    endif
+
+    " Clear the previous tag sign
+    if g:JavaBrowser_Use_Icon == 1 || g:JavaBrowser_Use_Text_Icon == 1
+        exe 'sign unplace 2 buffer=' . bufnr('%')
     endif
 endfunction
 
