@@ -1,0 +1,54 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=588
+
+This script is modelled on TagList vim script. Thanks to Yegappan Lakshmanan for taglist.vim
+However, this script is SPECIFICALLY tailored for Java language. So, it shows structure of the Java file
+starting with classes defined within it and NOT in a general tag structure. I found it useful and hope you all
+find it useful too. It also has a nice syntax to show the class members in UML format.
+
+The "Java Browser" plugin provides the following features:
+1. Opens details of Java file types (class, package etc) in a Tree structure in a separate vim window
+e.g: + package
+            java.util
+       + class
+       +   vector
+       +      field
+                  ....
+       +      method
+                  ....
+2. The tree has syntax highlighting as follows:
+    A. public members in green, protected in orange, private in red
+    B. static members are underlined and abstracts are shown in italics as per UML specs in addition to above highlighting.
+e.g:- If you have method that public static and abstract, it will shown in green color, in italic and underlined. You can think of all possible combinations.
+3. When you double click (configurable for a single click) or hit enter key in the browser window when on a member, it will take you to the definition of that member in the Java file window.
+4. It can show an arrow (=>) or an icon (ONLY for signs enabled VIM) showing the current position of the cursor in the java file.
+5. The browser window is updated automatically when you open any other Java file (or switch between buffers) in the Java file window. You can manually update browser window by typing 'u' in the browser window (when u change a class for example and you need that to be reflected).
+6. When you put the cursor (not the mouse pointer) on a member, it shows the prototype of the member declaration in the command window (like baloon popup in IDEs!)
+7. It understands the inner classes and are shown like HashMap.Iterator etc.
+8. It understands the overridden methods.
+9. Browser window opening can be configured for a vertically/horizontally split Vim window.
+10. Groups the tags by their type and displays them in a foldable tree.
+11. Automatically highlights the current tag name.
+12. The browser window contents can be sorted either by name or by line number.
+13. Runs in all the platforms where the exuberant ctags utility and Vim are
+     supported (this includes MS-Windows and Unix based systems).
+
+ TODO:
+ 1. To cache ctags output for a file to speed up displaying the taglist
+     window.
+ 
+This plugin relies on the exuberant ctags utility to generate the tag
+ listing. You can download the exuberant ctags utility from
+ http://ctags.sourceforge.net. The exuberant ctags utility must be installed
+ in your system to use this plugin. You should use exuberant ctags version
+ 5.3 and above.  There is no need for you to create a tags file to use this
+ plugin.
+
+ This script relies on the Vim "filetype" detection mechanism to determine
+ the type of the current file. To turn on filetype detection use
+
+               :filetype on
+
+ This plugin will not work in 'compatible' mode.  Make sure the 'compatible'
+ option is not set. This plugin will not work if you run Vim in the
+ restricted mode (using the -Z command-line argument). This plugin also
+ assumes that the system() Vim function is supported.
