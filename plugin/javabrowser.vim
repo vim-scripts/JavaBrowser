@@ -1,9 +1,11 @@
 " File: JavaBrowser.vim
 " Author: Pradeep Unde (pradeep_unde AT yahoo DOT com)
-" Version: l.11
-" Last Modified: Apr 14, 2003
+" Version: l.12
+" Last Modified: Apr 15, 2003
 "
 " ChangeLog:
+" Version 1.12:
+" 1. Small bug fix to remove unwanted echo for visibility.
 " Version 1.11:
 " 1. Now interface methods are highlighted as public, abstract. I missed
 " the abstract part in the previous version.
@@ -867,7 +869,7 @@ function! s:JavaBrowser_Get_Visib_From_Proto(bufnum, proto)
     let l:tmp_proto = strpart(a:proto, l:visibstartidx, l:visibendidx-l:visibstartidx)
     while l:visibstartidx != -1
         let l:cur_proto_part = strpart(l:tmp_proto, 0, stridx(l:tmp_proto, " "))
-        call s:JavaBrowser_Warning_Msg('current proto part: '.l:cur_proto_part)
+        "call s:JavaBrowser_Warning_Msg('current proto part: '.l:cur_proto_part)
         if stridx(s:jbrowser_def_{ftype}_visibilities, l:cur_proto_part) != -1
             let l:visib = l:cur_proto_part
             break
