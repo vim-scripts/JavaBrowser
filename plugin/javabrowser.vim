@@ -1,9 +1,11 @@
 " File: JavaBrowser.vim
 " Author: Pradeep Unde (pradeep_unde AT yahoo DOT com)
-" Version: l.18
-" Last Modified: Nov 18, 2003
+" Version: l.19
+" Last Modified: March 10,  2006
 "
 " ChangeLog:
+" Version 1.19:
+" 1. Added the balloon (or tool-tip) for the prototype
 " Version 1.18:
 " 1. Bug fix when sorted by name. Fixed the tag position. Now it shows the
 " arrow at correct position.
@@ -437,6 +439,13 @@ else
         exe 'sign define currTag text==> texthl=Constant'
     endif
 endif
+
+" Display the prototype of the tag where mouse is pointing to
+if !has('baloon_eval')
+    set bexpr=JavaBrowser_Show_Prototype()
+    set ballooneval
+endif
+
 
 " File types supported by taglist
 let s:jbrowser_file_types = 'java'
@@ -1810,6 +1819,36 @@ if g:JavaBrowser_Auto_Open
     autocmd VimEnter * nested JavaBrowser
 endif
 
+function! JavaBrowser_Show_Prototype()
+    " Make sure that mouse in Javabrowser window name
+    let l:bname = '__JBrowser_List__'
+    let l:bufnum = bufnr(l:bname)
+    if l:bufnum != v:beval_bufnr
+        return ''
+    endif
+    
+    " If we have already displayed prototype in the tag window, no need to
+    " display it in the popup
+    if g:JavaBrowser_Display_Prototype == 1
+        return ''
+    endif
+
+    " Do not process comment lines and empty lines
+    if v:beval_text == '' || v:beval_text[0] == '"'
+        return ''
+    endif
+
+    " If inside a fold, then don't display the prototype
+    if foldclosed(v:beval_lnum) != -1
+        return ''
+    endif
+
+    let l:lineno = v:beval_lnum - 1
+    let l:varname = 'b:line_no_' . l:lineno . '_proto'
+    let l:local_varname = 'line_no_' . l:lineno . '_proto'
+    let l:proto_val = getbufvar(l:bufnum, l:local_varname)
+    return l:proto_val
+endfunction
 
 " Define the 'JavaBrowser' and user commands to open/close taglist
 " window
