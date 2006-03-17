@@ -4,6 +4,9 @@
 " Last Modified: March 10,  2006
 "
 " ChangeLog:
+" Version 1.20:
+" 1. Bugfix to correct the typo for balloon_eval
+" 2. Now also checking if the version > 700 before setting the bexpr option
 " Version 1.19:
 " 1. Added the balloon (or tool-tip) for the prototype
 " Version 1.18:
@@ -441,7 +444,7 @@ else
 endif
 
 " Display the prototype of the tag where mouse is pointing to
-if !has('baloon_eval')
+if version >= 700 && has('balloon_eval')
     set bexpr=JavaBrowser_Show_Prototype()
     set ballooneval
 endif
