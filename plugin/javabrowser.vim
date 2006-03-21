@@ -1,9 +1,13 @@
 " File: JavaBrowser.vim
 " Author: Pradeep Unde (pradeep_unde AT yahoo DOT com)
-" Version: l.19
-" Last Modified: March 10,  2006
+" Version: l.21
+" Last Modified: March 19,  2006
 "
 " ChangeLog:
+" Version 1.21:
+" 1. Added option JavaBrowser_Show_UML_Visibility. If set, which is the
+" default, JavaBrowser uses UML visibility indicators. + => public,
+" - => private, # => protected in addition to the syntax highlighting.
 " Version 1.20:
 " 1. Bugfix to correct the typo for balloon_eval
 " 2. Now also checking if the version > 700 before setting the bexpr option
@@ -339,6 +343,11 @@ let loaded_javabroswer=1
 " Location of the exuberant ctags tool
 if !exists('JavaBrowser_Ctags_Cmd')
     let JavaBrowser_Ctags_Cmd = 'ctags'
+endif
+
+" Option to show UML like visibility notations
+if !exists('JavaBrowser_Show_UML_Visibility')
+    let JavaBrowser_Show_UML_Visibility = 1
 endif
 
 " Tag listing sort type - 'name' or 'order'
@@ -1321,6 +1330,18 @@ function! s:JavaBrowser_Explore_File(bufnum)
                             let l:override_idx = stridx(one_val, '__OVERRIDE__')
                             if l:override_idx != -1
                                 let l:subtype_val = strpart(one_val, 0, l:override_idx)
+                            endif
+                            " Show UML visibility notations
+                            if g:JavaBrowser_Show_UML_Visibility == 1
+                                if stridx(b:line_no_{l:curr_line}_proto, 'public') != -1
+                                    let l:subtype_val = '+ ' . l:subtype_val
+                                endif
+                                if stridx(b:line_no_{l:curr_line}_proto, 'protected') != -1
+                                    let l:subtype_val = '# ' . l:subtype_val
+                                endif
+                                if stridx(b:line_no_{l:curr_line}_proto, 'private') != -1
+                                    let l:subtype_val = '- ' . l:subtype_val
+                                endif
                             endif
                             silent! put ='      ' . l:subtype_val
                             if exists(l:tmpvarname)
