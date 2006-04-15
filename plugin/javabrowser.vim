@@ -1,9 +1,15 @@
 " File: JavaBrowser.vim
 " Author: Pradeep Unde (pradeep_unde AT yahoo DOT com)
-" Version: l.21
-" Last Modified: March 19,  2006
+" Version: l.22
+" Last Modified: April 15,  2006
 "
 " ChangeLog:
+" Version 1.22:
+" 1. Added function JavaBrowser_Set_Syntax_Highlighting().
+" 2. Now, the syntax highlighting for the Class tree would automatically be set
+" when a new window is opened or at the time of tag refersh. So, the user would
+" always see the syntax highlighting set for JavaBrowser syntax groups even if
+" the color scheme is changed in middle of an editing session.
 " Version 1.21:
 " 1. Added option JavaBrowser_Show_UML_Visibility. If set, which is the
 " default, JavaBrowser uses UML visibility indicators. + => public,
@@ -466,87 +472,6 @@ if exists('g:jbrowser_file_types')
     let s:jbrowser_file_types = s:jbrowser_file_types . ' ' . g:jbrowser_file_types
 endif
 
-" Highlight the comments
-if has('syntax')
-    syntax match JavaBrowserComment '^" .*'
-
-    " Colors used to highlight the selected tag name
-    highlight clear TagName
-    if has('gui_running') || &t_Co > 2
-        highlight link TagName Search
-    else
-        highlight TagName term=reverse cterm=reverse
-    endif
-
-    " Colors to highlight. These are the defaults. User can change them in
-    " their gvimrc as per their wish
-    highlight link JavaBrowserComment Comment
-    highlight clear JavaBrowserTitle
-    highlight link JavaBrowserTitle Title
-    highlight link JavaBrowserType Type
-    highlight link JavaBrowserId Identifier
-    
-    " Colors for public members
-    highlight link JavaBrowser_public Special
-    highlight JavaBrowser_public ctermfg=green guifg=green
-
-    " Colors for protected members
-    highlight link JavaBrowser_protected Statement
-    highlight JavaBrowser_protected ctermfg=brown guifg=orange
-
-    " Colors for private members
-    highlight link JavaBrowser_private Keyword
-    highlight JavaBrowser_private ctermfg=red guifg=red
-
-    " Colors for public, abstract members
-    highlight link JavaBrowser_public_abstract JavaBrowser_public
-    highlight JavaBrowser_public_abstract ctermfg=green term=italic cterm=italic guifg=green gui=italic
-    
-    " Colors for protected, abstract members
-    highlight link JavaBrowser_protected_abstract JavaBrowser_protected
-    highlight JavaBrowser_protected_abstract ctermfg=brown term=italic cterm=italic guifg=orange gui=italic
-    
-    " Colors for private, abstarct members
-    highlight link JavaBrowser_private_abstract JavaBrowser_private
-    highlight JavaBrowser_private_abstract ctermfg=red term=italic cterm=italic guifg=red gui=italic
-
-    " Colors for public, static members
-    highlight link JavaBrowser_public_static JavaBrowser_public
-    highlight JavaBrowser_public_static ctermfg=green term=underline cterm=underline guifg=green gui=underline
-    
-    " Colors for protected, static members
-    highlight link JavaBrowser_protected_static JavaBrowser_protected
-    highlight JavaBrowser_protected_static ctermfg=brown term=underline cterm=underline guifg=orange gui=underline
-    
-    " Colors for private, static members
-    highlight link JavaBrowser_private_static JavaBrowser_private
-    highlight JavaBrowser_private_static ctermfg=red term=underline cterm=underline guifg=red gui=underline
-
-    " Colors for abstract, static members (with default visibility)
-    highlight link JavaBrowser_abstract_static Normal
-    highlight JavaBrowser_abstract_static term=italic,underline cterm=italic,underline gui=italic,underline
-    
-    " Colors for static members (with default visibility)
-    highlight link JavaBrowser_static Normal
-    highlight JavaBrowser_static term=underline cterm=underline gui=underline
-    
-    " Colors for abstract members (with default visibility)
-    highlight link JavaBrowser_abstract Normal
-    highlight JavaBrowser_abstract term=italic cterm=italic gui=italic
-    
-    " Colors for public, abstract, static members
-    highlight link JavaBrowser_public_abstract_static JavaBrowser_public
-    highlight JavaBrowser_public_abstract_static ctermfg=green term=italic,underline cterm=italic,underline guifg=green gui=italic,underline
-    
-    " Colors for protected, abstract, static members
-    highlight link JavaBrowser_protected_abstract_static JavaBrowser_protected
-    highlight JavaBrowser_protected_abstract_static ctermfg=brown term=italic,underline cterm=italic,underline guifg=orange gui=italic,underline
-    
-    " Colors for private, abstract, static members
-    highlight link JavaBrowser_private_abstract_static JavaBrowser_private
-    highlight JavaBrowser_private_abstract_static ctermfg=red term=italic,underline cterm=italic,underline guifg=red gui=italic,underline
-endif
-
 " c++ language
 "let s:jbrowser_def_cpp_ctags_args = '--language-force=c++ --c++-types=vdtcgsuf'
 "let s:jbrowser_def_cpp_tag_types = 'macro typedef class enum struct union ' .
@@ -942,9 +867,13 @@ function! s:JavaBrowser_IsInterface(bufnum, varname)
     endif
     let l:allinterfaces = b:jbrowser_{ftype}_interface
     while l:allinterfaces != ''
-        let l:iname = strpart(l:allinterfaces, 0, stridx(l:allinterfaces, "\n"))
+        " TODO: CHANGE ******
+        "let l:iname = strpart(l:allinterfaces, 0, stridx(l:allinterfaces, "\n"))
+        let l:iname = strpart(l:allinterfaces, 0, stridx(l:allinterfaces, "#"))
         " Remove the line
-        let l:allinterfaces = strpart(l:allinterfaces, stridx(l:allinterfaces, "\n") + 1)
+        " TODO: CHANGE ******
+        "let l:allinterfaces = strpart(l:allinterfaces, stridx(l:allinterfaces, "\n") + 1)
+        let l:allinterfaces = strpart(l:allinterfaces, stridx(l:allinterfaces, "#") + 1)
         if iname == a:varname
             return 1
         endif
@@ -1140,7 +1069,9 @@ function! s:JavaBrowser_Explore_File(bufnum)
                 if tscope != ''
                     let l:temptxt = tscope . '.' . ttxt
                 endif
-                let b:jbrowser_{ftype}_{ttype} = b:jbrowser_{ftype}_{ttype} . l:temptxt . "\n"
+                " TODO: CHANGE ******
+                "let b:jbrowser_{ftype}_{ttype} = b:jbrowser_{ftype}_{ttype} . l:temptxt . "\n"
+                let b:jbrowser_{ftype}_{ttype} = b:jbrowser_{ftype}_{ttype} . l:temptxt . "#"
                 "call s:JavaBrowser_Warning_Msg('b:jbrowser_'.ftype.'_'.ttype.'='.b:jbrowser_{ftype}_{ttype})
                 let l:{ttype}_{l:temptxt}_lineno = lnno
                 let l:{ttype}_{l:temptxt}_lineno_proto = proto
@@ -1172,14 +1103,20 @@ function! s:JavaBrowser_Explore_File(bufnum)
                 "call s:JavaBrowser_Warning_Msg('l:thistype='.l:thistype.' l:alltypes='.l:alltypes)
                 if stridx(l:alltypes, l:thistype) == -1
                     let l:{tscope}_{ttype} = ''
-                    let l:alltypes = l:alltypes . l:thistype . "\n"
+                    " TODO: CHANGE ******
+                    "let l:alltypes = l:alltypes . l:thistype . "\n"
+                    let l:alltypes = l:alltypes . l:thistype . "#"
                 endif
                 " Check for overriden methods
                 let l:tmp_types = l:{tscope}_{ttype}
                 while l:tmp_types != ''
-                    let l:tmp_type = strpart(l:tmp_types, 0, stridx(l:tmp_types, "\n"))
+                    " TODO: CHANGE ******
+                    "let l:tmp_type = strpart(l:tmp_types, 0, stridx(l:tmp_types, "\n"))
+                    let l:tmp_type = strpart(l:tmp_types, 0, stridx(l:tmp_types, "#"))
                     " Remove the line
-                    let l:tmp_types = strpart(l:tmp_types, stridx(l:tmp_types, "\n") + 1)
+                    " TODO: CHANGE ******
+                    "let l:tmp_types = strpart(l:tmp_types, stridx(l:tmp_types, "\n") + 1)
+                    let l:tmp_types = strpart(l:tmp_types, stridx(l:tmp_types, "#") + 1)
                     " Check if we encountered method with same name previously
                     if l:tmp_type == ttxt
                         let ttxt = ttxt . '__OVERRIDE__' . l:override_cnt
@@ -1187,7 +1124,9 @@ function! s:JavaBrowser_Explore_File(bufnum)
                         break
                     endif
                 endwhile
-                let l:{tscope}_{ttype} = l:{tscope}_{ttype} . ttxt . "\n"
+                " TODO: CHANGE ******
+                "let l:{tscope}_{ttype} = l:{tscope}_{ttype} . ttxt . "\n"
+                let l:{tscope}_{ttype} = l:{tscope}_{ttype} . ttxt . "#"
                 "call s:JavaBrowser_Warning_Msg('l:'.tscope.'_'.ttype.'='.l:{tscope}_{ttype})
                 let l:{tscope}_{ttype}_{ttxt}_lineno = lnno
                 let l:{tscope}_{ttype}_{ttxt}_lineno_proto = proto
@@ -1282,14 +1221,20 @@ function! s:JavaBrowser_Explore_File(bufnum)
             endif
             let l:types = b:jbrowser_{ftype}_{ttype}
             while l:types != ''
-                let l:type = strpart(l:types, 0, stridx(l:types, "\n"))
+                " TODO: CHANGE ******
+                "let l:type = strpart(l:types, 0, stridx(l:types, "\n"))
+                let l:type = strpart(l:types, 0, stridx(l:types, "#"))
                 " Remove the line
-                let l:types = strpart(l:types, stridx(l:types, "\n") + 1)
+                " TODO: CHANGE ******
+                "let l:types = strpart(l:types, stridx(l:types, "\n") + 1)
+                let l:types = strpart(l:types, stridx(l:types, "#") + 1)
                 let l:type_start = line('.')
                 let b:line_no_{l:type_start} = l:{l:ttype}_{l:type}_lineno
                 let b:line_no_{l:type_start}_proto = l:{l:ttype}_{l:type}_lineno_proto
                 let b:buf_to_jbrowser_line_no_{l:{l:ttype}_{l:type}_lineno} = l:type_start + 1
-                let b:buf_to_jbrowser_line_nos = b:buf_to_jbrowser_line_nos . l:{l:ttype}_{l:type}_lineno . "\n"
+                " TODO: CHANGE ******
+                "let b:buf_to_jbrowser_line_nos = b:buf_to_jbrowser_line_nos . l:{l:ttype}_{l:type}_lineno . "\n"
+                let b:buf_to_jbrowser_line_nos = b:buf_to_jbrowser_line_nos . l:{l:ttype}_{l:type}_lineno . "#"
                 "call s:JavaBrowser_Warning_Msg('b:buf_to_jbrowser_line_no_'.l:{l:ttype}_{l:type}_lineno.'='.l:type_start)
                 "call s:JavaBrowser_Warning_Msg('b:line_no_{'.l:type_start.'}:'.l:{l:ttype}_{l:type}_lineno)
                 " Put actual class/package name etc
@@ -1317,14 +1262,20 @@ function! s:JavaBrowser_Explore_File(bufnum)
                             exe 'syntax match JavaBrowserTitle /^' . '    ' . l:curr_sub_type . '$/'
                         endif
                         while l:{type_sub_type} != ''
-                            let one_val = strpart(l:{type_sub_type}, 0, stridx(l:{type_sub_type}, "\n"))
+                            " TODO: CHANGE ******
+                            "let one_val = strpart(l:{type_sub_type}, 0, stridx(l:{type_sub_type}, "\n"))
+                            let one_val = strpart(l:{type_sub_type}, 0, stridx(l:{type_sub_type}, "#"))
                             " Remove the line
-                            let l:{type_sub_type} = strpart(l:{type_sub_type}, stridx(l:{type_sub_type}, "\n") + 1)
+                            " TODO: CHANGE ******
+                            "let l:{type_sub_type} = strpart(l:{type_sub_type}, stridx(l:{type_sub_type}, "\n") + 1)
+                            let l:{type_sub_type} = strpart(l:{type_sub_type}, stridx(l:{type_sub_type}, "#") + 1)
                             let l:curr_line = line('.')
                             let b:line_no_{l:curr_line} = l:{l:type_sub_type}_{one_val}_lineno
                             let b:line_no_{l:curr_line}_proto = l:{l:type_sub_type}_{one_val}_lineno_proto
                             let b:buf_to_jbrowser_line_no_{l:{l:type_sub_type}_{one_val}_lineno} = l:curr_line + 1
-                            let b:buf_to_jbrowser_line_nos = b:buf_to_jbrowser_line_nos . l:{l:type_sub_type}_{one_val}_lineno . "\n"
+                            " TODO: CHANGE ******
+                            "let b:buf_to_jbrowser_line_nos = b:buf_to_jbrowser_line_nos . l:{l:type_sub_type}_{one_val}_lineno . "\n"
+                            let b:buf_to_jbrowser_line_nos = b:buf_to_jbrowser_line_nos . l:{l:type_sub_type}_{one_val}_lineno . "#"
                             let l:tmpvarname = 'l:'.l:type_sub_type.'_'.one_val.'_lineno_visib'
                             let l:subtype_val = one_val
                             let l:override_idx = stridx(one_val, '__OVERRIDE__')
@@ -1410,9 +1361,97 @@ function! s:JavaBrowser_Explore_File(bufnum)
     return
 endfunction
 
+" JavaBrowser_Set_Syntax_Highlighting()
+" Set the syntax highlighting groups
+function! s:JavaBrowser_Set_Syntax_Highlighting()
+" Highlight the comments
+if has('syntax')
+    syntax match JavaBrowserComment '^" .*'
+
+    " Colors used to highlight the selected tag name
+    highlight clear TagName
+    if has('gui_running') || &t_Co > 2
+        highlight link TagName Search
+    else
+        highlight TagName term=reverse cterm=reverse
+    endif
+
+    " Colors to highlight. These are the defaults. User can change them in
+    " their gvimrc as per their wish
+    highlight link JavaBrowserComment Comment
+    highlight clear JavaBrowserTitle
+    highlight link JavaBrowserTitle Title
+    highlight link JavaBrowserType Type
+    highlight link JavaBrowserId Identifier
+    
+    " Colors for public members
+    highlight link JavaBrowser_public Special
+    highlight JavaBrowser_public ctermfg=green guifg=green
+
+    " Colors for protected members
+    highlight link JavaBrowser_protected Statement
+    highlight JavaBrowser_protected ctermfg=brown guifg=orange
+
+    " Colors for private members
+    highlight link JavaBrowser_private Keyword
+    highlight JavaBrowser_private ctermfg=red guifg=red
+
+    " Colors for public, abstract members
+    highlight link JavaBrowser_public_abstract JavaBrowser_public
+    highlight JavaBrowser_public_abstract ctermfg=green term=italic cterm=italic guifg=green gui=italic
+    
+    " Colors for protected, abstract members
+    highlight link JavaBrowser_protected_abstract JavaBrowser_protected
+    highlight JavaBrowser_protected_abstract ctermfg=brown term=italic cterm=italic guifg=orange gui=italic
+    
+    " Colors for private, abstarct members
+    highlight link JavaBrowser_private_abstract JavaBrowser_private
+    highlight JavaBrowser_private_abstract ctermfg=red term=italic cterm=italic guifg=red gui=italic
+
+    " Colors for public, static members
+    highlight link JavaBrowser_public_static JavaBrowser_public
+    highlight JavaBrowser_public_static ctermfg=green term=underline cterm=underline guifg=green gui=underline
+    
+    " Colors for protected, static members
+    highlight link JavaBrowser_protected_static JavaBrowser_protected
+    highlight JavaBrowser_protected_static ctermfg=brown term=underline cterm=underline guifg=orange gui=underline
+    
+    " Colors for private, static members
+    highlight link JavaBrowser_private_static JavaBrowser_private
+    highlight JavaBrowser_private_static ctermfg=red term=underline cterm=underline guifg=red gui=underline
+
+    " Colors for abstract, static members (with default visibility)
+    highlight link JavaBrowser_abstract_static Normal
+    highlight JavaBrowser_abstract_static term=italic,underline cterm=italic,underline gui=italic,underline
+    
+    " Colors for static members (with default visibility)
+    highlight link JavaBrowser_static Normal
+    highlight JavaBrowser_static term=underline cterm=underline gui=underline
+    
+    " Colors for abstract members (with default visibility)
+    highlight link JavaBrowser_abstract Normal
+    highlight JavaBrowser_abstract term=italic cterm=italic gui=italic
+    
+    " Colors for public, abstract, static members
+    highlight link JavaBrowser_public_abstract_static JavaBrowser_public
+    highlight JavaBrowser_public_abstract_static ctermfg=green term=italic,underline cterm=italic,underline guifg=green gui=italic,underline
+    
+    " Colors for protected, abstract, static members
+    highlight link JavaBrowser_protected_abstract_static JavaBrowser_protected
+    highlight JavaBrowser_protected_abstract_static ctermfg=brown term=italic,underline cterm=italic,underline guifg=orange gui=italic,underline
+    
+    " Colors for private, abstract, static members
+    highlight link JavaBrowser_private_abstract_static JavaBrowser_private
+    highlight JavaBrowser_private_abstract_static ctermfg=red term=italic,underline cterm=italic,underline guifg=red gui=italic,underline
+endif
+endfunction
+
 " JavaBrowser_Toggle_Window()
 " Open or close a taglist window
 function! s:JavaBrowser_Toggle_Window(bufnum)
+    " Set the syntx highlighting
+    call s:JavaBrowser_Set_Syntax_Highlighting()
+
     let curline = line('.')
 
     " Tag list window name
@@ -1727,6 +1766,9 @@ endfunction
 " Highlight tag from Javabrowser Buffer given the source line number and
 " source buffer number
 function! s:JavaBrowser_Highlight_Tag(buf_no, linenum)
+    " Set the syntx highlighting
+    call s:JavaBrowser_Set_Syntax_Highlighting()
+
     " JavaBrowser window name
     let l:bname = '__JBrowser_List__'
 
@@ -1748,9 +1790,13 @@ function! s:JavaBrowser_Highlight_Tag(buf_no, linenum)
     if b:jbrowser_sort_type == 'order'
         let l:prv_line_no = -1
         while l:all_line_nos != ''
-            let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
+            " TODO: CHANGE ******
+            "let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
+            let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "#"))
             " Remove the line
-            let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
+            " TODO: CHANGE ******
+            "let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
+            let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "#") + 1)
             if l:line_no == a:linenum
                 let l:buf_lineno = l:line_no
                 break
@@ -1764,9 +1810,13 @@ function! s:JavaBrowser_Highlight_Tag(buf_no, linenum)
     else
         let l:nearest_line_offset = -1
         while l:all_line_nos != ''
-            let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
+            " TODO: CHANGE ******
+            "let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
+            let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "#"))
             " Remove the line
-            let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
+            " TODO: CHANGE ******
+            "let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
+            let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "#") + 1)
             if l:line_no == a:linenum
                 let l:buf_lineno = l:line_no
                 break
@@ -1827,9 +1877,13 @@ function! s:JavaBrowser_Clear_Buf_To_JBrowser_Map()
     endif
     let l:all_line_nos = b:buf_to_jbrowser_line_nos
     while l:all_line_nos != ''
-        let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
+        " TODO: CHANGE ******
+        "let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
+        let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "#"))
         " Remove the line
-        let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
+        " TODO: CHANGE ******
+        "let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
+        let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "#") + 1)
         let l:varname = 'b:buf_to_jbrowser_line_no_' . l:line_no
         if exists(l:varname)
             unlet! b:buf_to_jbrowser_line_no_{l:line_no}
