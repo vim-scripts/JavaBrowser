@@ -1,9 +1,14 @@
 " File: JavaBrowser.vim
 " Author: Pradeep Unde (pradeep_unde AT yahoo DOT com)
-" Version: l.22
-" Last Modified: April 15,  2006
+" Version: 2.0
+" Last Modified: August 29, 2006
 "
 " ChangeLog:
+" Version 2.0:
+" 1. Overhauled the code for version 7.0
+" 2. Does not give errors for version 7.0 now when browsing the class tree
+" 3. Added caching for ctags output, so, buffer switching is very fast for
+" previously viewed buffers
 " Version 1.22:
 " 1. Added function JavaBrowser_Set_Syntax_Highlighting().
 " 2. Now, the syntax highlighting for the Class tree would automatically be set
@@ -133,10 +138,6 @@
 "     supported (this includes MS-Windows and Unix based systems).
 " 9. Runs in both console/terminal and GUI versions of Vim.
 " 
-" TODO:
-" 1. To cache ctags output for a file to speed up displaying the taglist
-"     window.
-"
 " This plugin relies on the exuberant ctags utility to generate the tag
 " listing. You can download the exuberant ctags utility from
 " http://ctags.sourceforge.net. The exuberant ctags utility must be installed
@@ -856,31 +857,6 @@ function! s:JavaBrowser_Close_Window()
     endif
 endfunction
 
-" JavaBrowser_IsInterface
-" Checks if the passed variable exists as an interface in the open java file
-" return 1 if an interface, 0 otherwise
-function! s:JavaBrowser_IsInterface(bufnum, varname)
-    let ftype = getbufvar(a:bufnum, '&filetype')
-    "call s:JavaBrowser_Warning_Msg('interfaces: '.b:jbrowser_{ftype}_interface)
-    if b:jbrowser_{ftype}_interface == ''
-        return 0
-    endif
-    let l:allinterfaces = b:jbrowser_{ftype}_interface
-    while l:allinterfaces != ''
-        " TODO: CHANGE ******
-        "let l:iname = strpart(l:allinterfaces, 0, stridx(l:allinterfaces, "\n"))
-        let l:iname = strpart(l:allinterfaces, 0, stridx(l:allinterfaces, "#"))
-        " Remove the line
-        " TODO: CHANGE ******
-        "let l:allinterfaces = strpart(l:allinterfaces, stridx(l:allinterfaces, "\n") + 1)
-        let l:allinterfaces = strpart(l:allinterfaces, stridx(l:allinterfaces, "#") + 1)
-        if iname == a:varname
-            return 1
-        endif
-    endwhile
-    return 0
-endfunction
-
 " JavaBrowser_Get_Visib_From_Proto
 " Get the visibility of a class member from its prototype
 function! s:JavaBrowser_Get_Visib_From_Proto(bufnum, proto)
@@ -920,7 +896,7 @@ function! s:JavaBrowser_Explore_File(bufnum)
 
     " Make sure the current filetype is supported by exuberant ctags
     if stridx(s:jbrowser_file_types, ftype) == -1
-        "call s:JavaBrowser_Warning_Msg('File type ' . ftype . ' not supported')
+        call s:JavaBrowser_Warning_Msg('File type ' . ftype . ' not supported')
         return
     endif
 
@@ -937,33 +913,10 @@ function! s:JavaBrowser_Explore_File(bufnum)
     if valid_cache != ''
         " Load the cached processed tags output from the buffer local
         " variables
-        let b:jbrowser_tag_count = getbufvar(a:bufnum, 'jbrowser_tag_count') + 0
-        let i = 1
-        while i <= b:jbrowser_tag_count
-            let var_name = 'jbrowser_tag_' . i
-            let b:jbrowser_tag_{i} =  getbufvar(a:bufnum, var_name)
-            let i = i + 1
-        endwhile
-
-        let i = 1
-        while i <= s:jbrowser_{ftype}_count
-            let ttype = s:jbrowser_{ftype}_{i}_name
-            "let var_name = 'jbrowser_' . ttype . '_start'
-            "let b:jbrowser_{ftype}_{ttype}_start = 
-            "            \ getbufvar(a:bufnum, var_name) + 0
-            let var_name = 'jbrowser_' . ttype . '_count'
-            let cnt = getbufvar(a:bufnum, var_name) + 0
-            let b:jbrowser_{ftype}_{ttype}_count = cnt
-            let var_name = 'jbrowser_' . ttype
-            let l:jbrowser_{ftype}_{ttype} = getbufvar(a:bufnum, var_name)
-            let j = 1
-            while j <= cnt
-                let var_name = 'jbrowser_' . ttype . '_' . j
-                let b:jbrowser_{ftype}_{ttype}_{j} = getbufvar(a:bufnum, var_name)
-                let j = j + 1
-            endwhile
-            let i = i + 1
-        endwhile
+        let b:classes_dict = getbufvar(a:bufnum, 'jbrowser_classes_dict')
+        let b:jbrowser_to_buffer_lno_dict = getbufvar(a:bufnum, 'jbrowser_to_buffer_lno_dict')
+        let b:buffer_to_jbrowser_lno_dict = getbufvar(a:bufnum, 'buffer_to_jbrowser_lno_dict')
+        let b:protos_dict = getbufvar(a:bufnum, 'jbrowser_protos_dict')
     else
         " Exuberant ctags arguments to generate a tag list
         let ctags_args = ' -f - --format=2 --excmd=pattern --fields=nKs '
@@ -990,7 +943,6 @@ function! s:JavaBrowser_Explore_File(bufnum)
 
         " Cache the ctags output with a buffer local variable
         "call setbufvar(a:bufnum, 'jbrowser_valid_cache', 'Yes')
-        call setbufvar(a:bufnum, 'jbrowser_sort_type', b:jbrowser_sort_type)
 
         " Handle errors
         if v:shell_error && cmd_output != ''
@@ -1003,15 +955,12 @@ function! s:JavaBrowser_Explore_File(bufnum)
             call s:JavaBrowser_Warning_Msg('No tags found for ' . filename)
             return
         endif
-
-        " Initialize variables for the new filetype
-        let i = 1
-        while i <= s:jbrowser_{ftype}_count
-            let ttype = s:jbrowser_{ftype}_{i}_name
-            let b:jbrowser_{ftype}_{ttype} = ''
-            let b:jbrowser_{ftype}_{ttype}_count = 0
-            let i = i + 1
-        endwhile
+        
+        " Initialize the variables
+        let b:classes_dict = {}
+        let b:jbrowser_to_buffer_lno_dict = {}
+        let b:buffer_to_jbrowser_lno_dict = {}
+        let b:protos_dict = {}
 
         " Process the ctags output one line at a time. Separate the tag output
         " based on the tag type and store it in the tag type variable
@@ -1030,6 +979,9 @@ function! s:JavaBrowser_Explore_File(bufnum)
 
             " Extract the tag type
             let ttype = s:JavaBrowser_Extract_Tagtype(one_line)
+            if ttype == 'package'
+                continue
+            endif
 
             let protostart = stridx(one_line, '^')
             let protoend = stridx(one_line, '$')
@@ -1044,8 +996,6 @@ function! s:JavaBrowser_Explore_File(bufnum)
             " Extract the tag name
             let ttxt = strpart(one_line, 0, stridx(one_line, "\t"))
             
-            "call s:JavaBrowser_Warning_Msg('visibility for '.ttxt.' is "'.visib.'"')
-
             " Add the tag scope, if it is available. Tag scope is the last
             " field after the 'line:<num>\t' field
             let start = strridx(one_line, 'line:')
@@ -1057,138 +1007,96 @@ function! s:JavaBrowser_Explore_File(bufnum)
                 let lnno = strpart(one_line, lnnostart+5, lnnoend-lnnostart-5)
                 let tscope = strpart(one_line, end + 1)
                 let tscope = strpart(tscope, stridx(tscope, ':') + 1)
-                "call s:JavaBrowser_Warning_Msg('scope for '.ttxt.' is '.tscope)
             else
                 let lnno = strpart(one_line, lnnostart+5)
             endif
+
+            " DEBUG messages
+            "call s:JavaBrowser_Warning_Msg('scope for '.ttxt.' is '.tscope)
+            "call s:JavaBrowser_Warning_Msg('lineno for '.ttxt.' is '.lnno)
+            if tscope == ''
+                continue
+            endif
             
-            " Check if the super type
-            if stridx(s:jbrowser_def_{ftype}_super_tag_types, ttype) != -1
-                " Check if the inner super type
-                let l:temptxt = ttxt
-                if tscope != ''
-                    let l:temptxt = tscope . '.' . ttxt
-                endif
-                " TODO: CHANGE ******
-                "let b:jbrowser_{ftype}_{ttype} = b:jbrowser_{ftype}_{ttype} . l:temptxt . "\n"
-                let b:jbrowser_{ftype}_{ttype} = b:jbrowser_{ftype}_{ttype} . l:temptxt . "#"
-                "call s:JavaBrowser_Warning_Msg('b:jbrowser_'.ftype.'_'.ttype.'='.b:jbrowser_{ftype}_{ttype})
-                let l:{ttype}_{l:temptxt}_lineno = lnno
-                let l:{ttype}_{l:temptxt}_lineno_proto = proto
-                "call s:JavaBrowser_Warning_Msg('visibility for '.ttxt.' is '.visib)
-                let l:{ttype}_{l:temptxt}_lineno_visib = ''
-                if stridx(s:jbrowser_def_{ftype}_visibilities, visib) != -1
-                    let l:{ttype}_{l:temptxt}_lineno_visib = visib
-                endif
-                if stridx(proto, ' abstract ') != -1
-                    let l:{ttype}_{l:temptxt}_lineno_visib = l:{ttype}_{l:temptxt}_lineno_visib . '_abstract'
-                    "call s:JavaBrowser_Warning_Msg('got abstarct='.proto)
-                endif
-                if stridx(proto, ' static ') != -1
-                    let l:{ttype}_{l:temptxt}_lineno_visib = l:{ttype}_{l:temptxt}_lineno_visib . '_static'
-                    "call s:JavaBrowser_Warning_Msg('got abstarct='.proto)
-                endif
-                " Cache result
-                "let var_name = 'jbrowser_' . ftype . '_' . ttype
-                "call setbufvar(a:bufnum, var_name, types)
-                "call s:JavaBrowser_Warning_Msg('var name='.ttype.'_'.l:temptxt.'_lineno')
-            else
-                if tscope == ''
-                    continue
-                endif
-                "call s:JavaBrowser_Warning_Msg('tscope before replacement of . with _'.tscope)
-                let tscope = substitute(tscope, '\.', '_', 'g')
-                "call s:JavaBrowser_Warning_Msg('tscope after replacement of . with _'.tscope)
-                let l:thistype = tscope . '_' . ttype
-                "call s:JavaBrowser_Warning_Msg('l:thistype='.l:thistype.' l:alltypes='.l:alltypes)
-                if stridx(l:alltypes, l:thistype) == -1
-                    let l:{tscope}_{ttype} = ''
-                    " TODO: CHANGE ******
-                    "let l:alltypes = l:alltypes . l:thistype . "\n"
-                    let l:alltypes = l:alltypes . l:thistype . "#"
-                endif
-                " Check for overriden methods
-                let l:tmp_types = l:{tscope}_{ttype}
-                while l:tmp_types != ''
-                    " TODO: CHANGE ******
-                    "let l:tmp_type = strpart(l:tmp_types, 0, stridx(l:tmp_types, "\n"))
-                    let l:tmp_type = strpart(l:tmp_types, 0, stridx(l:tmp_types, "#"))
-                    " Remove the line
-                    " TODO: CHANGE ******
-                    "let l:tmp_types = strpart(l:tmp_types, stridx(l:tmp_types, "\n") + 1)
-                    let l:tmp_types = strpart(l:tmp_types, stridx(l:tmp_types, "#") + 1)
-                    " Check if we encountered method with same name previously
-                    if l:tmp_type == ttxt
-                        let ttxt = ttxt . '__OVERRIDE__' . l:override_cnt
-                        let l:override_cnt = l:override_cnt + 1
-                        break
-                    endif
-                endwhile
-                " TODO: CHANGE ******
-                "let l:{tscope}_{ttype} = l:{tscope}_{ttype} . ttxt . "\n"
-                let l:{tscope}_{ttype} = l:{tscope}_{ttype} . ttxt . "#"
-                "call s:JavaBrowser_Warning_Msg('l:'.tscope.'_'.ttype.'='.l:{tscope}_{ttype})
-                let l:{tscope}_{ttype}_{ttxt}_lineno = lnno
-                let l:{tscope}_{ttype}_{ttxt}_lineno_proto = proto
-                "call s:JavaBrowser_Warning_Msg('visibility for '.ttxt.' is '.visib)
-                let l:{tscope}_{ttype}_{ttxt}_lineno_visib = ''
-                if stridx(s:jbrowser_def_{ftype}_visibilities, visib) != -1
-                    let l:{tscope}_{ttype}_{ttxt}_lineno_visib = visib
-                endif
-                if s:JavaBrowser_IsInterface(a:bufnum, tscope) == 1
-                    if stridx(l:{tscope}_{ttype}_{ttxt}_lineno_visib, 'public') == -1
-                        let l:{tscope}_{ttype}_{ttxt}_lineno_visib = l:{tscope}_{ttype}_{ttxt}_lineno_visib . 'public'
-                    endif
-                    if ttype == 'field'
-                        let l:{tscope}_{ttype}_{ttxt}_lineno_visib = l:{tscope}_{ttype}_{ttxt}_lineno_visib . '_static'
-                    endif
-                    if ttype == 'method' && stridx(proto, 'abstract ') == -1
-                        let l:{tscope}_{ttype}_{ttxt}_lineno_visib = l:{tscope}_{ttype}_{ttxt}_lineno_visib . '_abstract'
-                    endif
-                    "call s:JavaBrowser_Warning_Msg('got abstarct='.proto)
-                endif
-                if stridx(proto, 'abstract ') != -1
-                    if stridx(l:{tscope}_{ttype}_{ttxt}_lineno_visib, 'abstract') == -1
-                        let l:{tscope}_{ttype}_{ttxt}_lineno_visib = l:{tscope}_{ttype}_{ttxt}_lineno_visib . '_abstract'
-                        "call s:JavaBrowser_Warning_Msg('got abstarct='.proto)
-                    endif
-                endif
-                if stridx(proto, 'static ') != -1
-                    if stridx(l:{tscope}_{ttype}_{ttxt}_lineno_visib, 'static') == -1
-                        let l:{tscope}_{ttype}_{ttxt}_lineno_visib = l:{tscope}_{ttype}_{ttxt}_lineno_visib . '_static'
-                        "call s:JavaBrowser_Warning_Msg('got abstarct='.proto)
-                    endif
-                endif
-                "call s:JavaBrowser_Warning_Msg('l:'.tscope.'_'.ttype.'='.l:{tscope}_{ttype})
-                "call s:JavaBrowser_Warning_Msg('l:{'.tscope.'}_{'.ttype.'}_{'.ttxt.'}_lineno='.lnno)
-                "call s:JavaBrowser_Warning_Msg('var name='.tscope.'_'.ttype.'_'.ttxt.'_lineno')
+            " Check if the class entry exists already
+            if ! has_key(b:classes_dict, tscope)
+                " Add an empty entry for this class
+                let b:classes_dict[tscope] = {}
             endif
 
-            " Update the count of this tag type
-            let cnt = b:jbrowser_{ftype}_{ttype}_count + 1
-            let b:jbrowser_{ftype}_count = cnt
+            " Get the members dictionary for this class
+            let l:members = b:classes_dict[tscope]
+            if ! has_key(l:members, ttype)
+                " Add an empty entry for this class member type
+                let l:members[ttype] = {}
+            endif
 
+            " Get the members of type ttype for this class
+            let l:members_list = l:members[ttype]
+            
+            " Check for overriden methods
+            if has_key(l:members_list, ttxt)
+                " We got an overriden method
+                let ttxt = ttxt . '__OVERRIDE__' . l:override_cnt
+                let l:override_cnt = l:override_cnt + 1
+            endif
+            " Add an empty entry for this class member type
+            let l:members_list[ttxt] = []
+            let l:member_details = l:members_list[ttxt]
+
+            " DEBUG messages
+            "let l:str = string(l:member_details)
+            "call s:JavaBrowser_Warning_Msg('member_details: '.l:str)
+
+            " Add the line number, prototype and visibility for this member
+            call add(l:member_details, lnno)
+            call add(l:member_details, proto)
+
+            " DEBUG messages
+            "let l:str = string(l:member_details)
+            "call s:JavaBrowser_Warning_Msg('member_details: '.l:str)
+
+            " Form the visibility
+            let l:visibility = ''
+            if stridx(s:jbrowser_def_{ftype}_visibilities, visib) != -1
+                let l:visibility = visib
+            endif
+
+            " Check if we are working on an interface
+            if  ttype == 'interface'
+                if stridx(l:visibility, 'public') == -1
+                    let l:visibility = l:visibility . 'public'
+                endif
+                if ttype == 'field'
+                    let l:visibility = l:visibility . '_static'
+                endif
+                if ttype == 'method' && stridx(proto, 'abstract ') == -1
+                    let l:visibility = l:visibility . '_abstract'
+                endif
+            endif
+
+            " Deal with other types here
+            if stridx(proto, ' abstract ') != -1
+                let l:visibility = l:visibility . '_abstract'
+            endif
+            if stridx(proto, ' static ') != -1
+                let l:visibility = l:visibility . '_static'
+            endif
+            call add(l:member_details, l:visibility)
         endwhile
 
         " Cache the processed tags output using buffer local variables
-        call setbufvar(a:bufnum, 'jbrowser_tag_count', b:jbrowser_tag_count)
-        let i = 1
-        while i <= b:jbrowser_tag_count
-            let var_name = 'jbrowser_tag_' . i
-            call setbufvar(a:bufnum, var_name, b:jbrowser_tag_{i})
-            let i = i + 1
-        endwhile
+        call setbufvar(a:bufnum, 'jbrowser_valid_cache', 'Yes')
+        call setbufvar(a:bufnum, 'jbrowser_classes_dict', b:classes_dict)
+        call setbufvar(a:bufnum, 'jbrowser_to_buffer_lno_dict', b:jbrowser_to_buffer_lno_dict)
+        call setbufvar(a:bufnum, 'buffer_to_jbrowser_lno_dict', b:buffer_to_jbrowser_lno_dict)
+        call setbufvar(a:bufnum, 'jbrowser_protos_dict', b:protos_dict)
+        call setbufvar(a:bufnum, 'jbrowser_sort_type', b:jbrowser_sort_type)
 
-        let i = 1
-        while i <= s:jbrowser_{ftype}_count
-            let ttype = s:jbrowser_{ftype}_{i}_name
-            let types = b:jbrowser_{ftype}_{ttype}
-            if types != ''
-                let var_name = 'jbrowser_' . ftype . '_' . ttype
-                call setbufvar(a:bufnum, var_name, types)
-            endif
-            let i = i + 1
-        endwhile
+        " Cache the protos in JavaBrowser buffer
+        let l:jbrow_bname = '__JBrowser_List__'
+        let l:jbrow_bufnum = bufnr(l:jbrow_bname)
+        call setbufvar(l:jbrow_bufnum, 'jbrowser_protos_dict', b:protos_dict)
     endif
 
     " Set report option to a huge value to prevent informational messages
@@ -1205,143 +1113,109 @@ function! s:JavaBrowser_Explore_File(bufnum)
 
     let i = 1
     let l:ttype_put = ''
-    while i <= s:jbrowser_{ftype}_count
-        let ttype = s:jbrowser_{ftype}_{i}_name
-        " Add the tag type only if there are tags for that type
-        if b:jbrowser_{ftype}_{ttype} != ''
-            let l:ttype_start = line('.')
-            " Put package, class interface etc
-            if stridx(l:ttype_put, ttype) == -1
-                silent! put =ttype
-                " Syntax highlight the tag type names
-                if has('syntax')
-                    exe 'syntax match JavaBrowserType /^' . ttype . '$/'
-                endif
-                let l:ttype_put = l:ttype_put . ttype
+	
+    " Iterate through all the classes
+    for l:class_name in sort(keys(b:classes_dict))
+        let l:class_start_line = line('.')
+        " Add the class/interface name
+        silent! put ='  '.l:class_name
+        " Syntax highlight the tag type names
+        if has('syntax')
+            exe 'syntax match JavaBrowserType /^' . '  '.l:class_name . '$/'
+        endif
+        
+        " DEBUG messages
+        "let l:str = string(b:classes_dict)
+        "call s:JavaBrowser_Warning_Msg('class details dictionary: '.str)
+        let l:members = b:classes_dict[l:class_name]
+        " s:jbrowser_def_java_tag_types = 'package class interface field method'
+        let l:types = 'field method '
+        while l:types != ''
+            let l:type = strpart(l:types, 0, stridx(l:types, " "))
+            if l:type == ''
+                break
             endif
-            let l:types = b:jbrowser_{ftype}_{ttype}
-            while l:types != ''
-                " TODO: CHANGE ******
-                "let l:type = strpart(l:types, 0, stridx(l:types, "\n"))
-                let l:type = strpart(l:types, 0, stridx(l:types, "#"))
-                " Remove the line
-                " TODO: CHANGE ******
-                "let l:types = strpart(l:types, stridx(l:types, "\n") + 1)
-                let l:types = strpart(l:types, stridx(l:types, "#") + 1)
-                let l:type_start = line('.')
-                let b:line_no_{l:type_start} = l:{l:ttype}_{l:type}_lineno
-                let b:line_no_{l:type_start}_proto = l:{l:ttype}_{l:type}_lineno_proto
-                let b:buf_to_jbrowser_line_no_{l:{l:ttype}_{l:type}_lineno} = l:type_start + 1
-                " TODO: CHANGE ******
-                "let b:buf_to_jbrowser_line_nos = b:buf_to_jbrowser_line_nos . l:{l:ttype}_{l:type}_lineno . "\n"
-                let b:buf_to_jbrowser_line_nos = b:buf_to_jbrowser_line_nos . l:{l:ttype}_{l:type}_lineno . "#"
-                "call s:JavaBrowser_Warning_Msg('b:buf_to_jbrowser_line_no_'.l:{l:ttype}_{l:type}_lineno.'='.l:type_start)
-                "call s:JavaBrowser_Warning_Msg('b:line_no_{'.l:type_start.'}:'.l:{l:ttype}_{l:type}_lineno)
-                " Put actual class/package name etc
-                silent! put ='  '.l:type
-                " Syntax highlight the tag type names
-                if has('syntax')
-                    exe 'syntax match JavaBrowserId /^' . '  '.l:type . '$/'
+            let l:types = strpart(l:types, stridx(l:types, " ") + 1)
+            let l:type_start_line = line('.')
+
+            " Get the list of fields/methods for this class/interface
+            if ! has_key(l:members, l:type)
+                continue
+            endif
+            
+            " Put the type (field/method)
+            silent! put ='    '.l:type
+            " Syntax highlight the tag type names
+            if has('syntax')
+                exe 'syntax match JavaBrowserId /^' . '  '.l:type . '$/'
+            endif
+            
+            let l:members_list = l:members[l:type]
+            for l:member_name in sort(keys(l:members_list))
+                let l:curr_line = line('.')
+                let l:members_details = l:members_list[l:member_name]
+                let l:line_no = get(l:members_details, 0, "NONE")
+                let l:proto = get(l:members_details, 1, "NONE")
+                let l:visib = get(l:members_details, 2, "NONE")
+               
+                " Store the line numbers mapping
+                let b:jbrowser_to_buffer_lno_dict[l:curr_line] = l:line_no
+                let b:buffer_to_jbrowser_lno_dict[l:line_no] = l:curr_line
+                let b:protos_dict[l:curr_line] = l:proto
+
+                " Check for overriden methods and get the actual method name
+                let l:override_idx = stridx(l:member_name, '__OVERRIDE__')
+                if l:override_idx != -1
+                    let l:member_name = strpart(l:member_name, 0, l:override_idx)
                 endif
-                "while stridx(l:type, ".") > 0
-                "    let l:type = strpart(l:type, stridx(l:type, ".") + 1)
-                "endwhile
-                let l:type = substitute(l:type, '\.', '_', 'g')
-                let j = 1
-                while j <= s:jbrowser_{ftype}_count
-                    let l:curr_sub_type = s:jbrowser_{ftype}_{j}_name
-                let l:type_sub_type = l:type . '_' . l:curr_sub_type
-                    " Extract one line at a time
-                    "call s:JavaBrowser_Warning_Msg('l:type_sub_type='.l:type_sub_type.' l:alltypes='.l:alltypes)
-                    if stridx(l:alltypes, l:type_sub_type) != -1
-                        "let l:curr_sub_type = strpart(l:type_sub_type, stridx(l:type_sub_type, "_") + 1)
-                        let l:type_sub_type_start = line('.')
-                        silent! put ='    ' . l:curr_sub_type
-                        " Syntax highlight the tag type names
-                        if has('syntax')
-                            exe 'syntax match JavaBrowserTitle /^' . '    ' . l:curr_sub_type . '$/'
-                        endif
-                        while l:{type_sub_type} != ''
-                            " TODO: CHANGE ******
-                            "let one_val = strpart(l:{type_sub_type}, 0, stridx(l:{type_sub_type}, "\n"))
-                            let one_val = strpart(l:{type_sub_type}, 0, stridx(l:{type_sub_type}, "#"))
-                            " Remove the line
-                            " TODO: CHANGE ******
-                            "let l:{type_sub_type} = strpart(l:{type_sub_type}, stridx(l:{type_sub_type}, "\n") + 1)
-                            let l:{type_sub_type} = strpart(l:{type_sub_type}, stridx(l:{type_sub_type}, "#") + 1)
-                            let l:curr_line = line('.')
-                            let b:line_no_{l:curr_line} = l:{l:type_sub_type}_{one_val}_lineno
-                            let b:line_no_{l:curr_line}_proto = l:{l:type_sub_type}_{one_val}_lineno_proto
-                            let b:buf_to_jbrowser_line_no_{l:{l:type_sub_type}_{one_val}_lineno} = l:curr_line + 1
-                            " TODO: CHANGE ******
-                            "let b:buf_to_jbrowser_line_nos = b:buf_to_jbrowser_line_nos . l:{l:type_sub_type}_{one_val}_lineno . "\n"
-                            let b:buf_to_jbrowser_line_nos = b:buf_to_jbrowser_line_nos . l:{l:type_sub_type}_{one_val}_lineno . "#"
-                            let l:tmpvarname = 'l:'.l:type_sub_type.'_'.one_val.'_lineno_visib'
-                            let l:subtype_val = one_val
-                            let l:override_idx = stridx(one_val, '__OVERRIDE__')
-                            if l:override_idx != -1
-                                let l:subtype_val = strpart(one_val, 0, l:override_idx)
-                            endif
-                            " Show UML visibility notations
-                            if g:JavaBrowser_Show_UML_Visibility == 1
-                                if stridx(b:line_no_{l:curr_line}_proto, 'public') != -1
-                                    let l:subtype_val = '+ ' . l:subtype_val
-                                endif
-                                if stridx(b:line_no_{l:curr_line}_proto, 'protected') != -1
-                                    let l:subtype_val = '# ' . l:subtype_val
-                                endif
-                                if stridx(b:line_no_{l:curr_line}_proto, 'private') != -1
-                                    let l:subtype_val = '- ' . l:subtype_val
-                                endif
-                            endif
-                            silent! put ='      ' . l:subtype_val
-                            if exists(l:tmpvarname)
-                                let b:line_no_{l:curr_line}_visib = l:{l:type_sub_type}_{one_val}_lineno_visib
-                                let l:syntaxGrp = 'JavaBrowser'
-                                if stridx(b:line_no_{l:curr_line}_visib, '_') == 0
-                                    let l:syntaxGrp = l:syntaxGrp . b:line_no_{l:curr_line}_visib
-                                else
-                                    let l:syntaxGrp = l:syntaxGrp . '_' . b:line_no_{l:curr_line}_visib
-                                endif
-                                if has('syntax')
-                                    exe 'syntax match ' . l:syntaxGrp . ' /' . one_val . '$/'
-                                endif
-                            endif
-                        endwhile
-                        " create a fold for this tag type
-                        if has('folding')
-                            let fold_start = l:type_sub_type_start+1
-                            let fold_end = line('.')
-                            exe fold_start . ',' . fold_end  . 'fold'
-                        endif
+                
+                " Show UML visibility notations
+                if g:JavaBrowser_Show_UML_Visibility == 1
+                    if stridx(l:proto, 'public') != -1
+                        let l:member_name = '+ ' . l:member_name
                     endif
-                    let j = j + 1
-                endwhile
-                " create a fold for this tag type
-                if has('folding')
-                    let fold_start = l:type_start+1
-                    let fold_end = line('.')
-                    exe fold_start . ',' . fold_end  . 'fold'
+                    if stridx(l:proto, 'protected') != -1
+                        let l:member_name = '# ' . l:member_name
+                    endif
+                    if stridx(l:proto, 'private') != -1
+                        let l:member_name = '- ' . l:member_name
+                    endif
                 endif
-            endwhile
+
+                " Put the field/method and syntax highlight it
+                silent! put ='      ' . l:member_name
+                let l:syntaxGrp = 'JavaBrowser'
+                if stridx(l:visib, '_') == 0
+                    let l:syntaxGrp = l:syntaxGrp . l:visib
+                else
+                    let l:syntaxGrp = l:syntaxGrp . '_' . l:visib
+                endif
+                if has('syntax')
+                    exe 'syntax match ' . l:syntaxGrp . ' /' . l:member_name . '$/'
+                endif
+            endfor
             " create a fold for this tag type
             if has('folding')
-                let fold_start = l:ttype_start+1
+                let fold_start = l:type_start_line+1
                 let fold_end = line('.')
                 exe fold_start . ',' . fold_end  . 'fold'
-                exe 'normal ' . fold_start . 'G'
-                exe 'normal zo'
-                exe 'normal ' . fold_end . 'G'
             endif
-            " Separate the tag types with a empty line
-            normal! G
-            if g:JavaBrowser_Compact_Format == 0
-                silent! put =''
-            endif
+        endwhile
+        " create a fold for this field/method type
+        if has('folding')
+            let fold_start = l:class_start_line+1
+            let fold_end = line('.')
+            exe fold_start . ',' . fold_end  . 'fold'
+            exe 'normal ' . fold_start . 'G'
+            exe 'normal zo'
+            exe 'normal ' . fold_end . 'G'
         endif
-        let i = i + 1
-    endwhile
-    "call s:JavaBrowser_Warning_Msg('b:buf_to_jbrowser_line_nos='.b:buf_to_jbrowser_line_nos)
+        " Separate the tag types with a empty line
+        normal! G
+        if g:JavaBrowser_Compact_Format == 0
+            silent! put =''
+        endif
+	endfor
 
     " Mark the buffer as not modifiable
     setlocal nomodifiable
@@ -1356,94 +1230,91 @@ function! s:JavaBrowser_Explore_File(bufnum)
     if g:JavaBrowser_Expand_Tree_At_Startup == 1
         silent! %foldopen!
     endif
-
-
-    return
 endfunction
 
 " JavaBrowser_Set_Syntax_Highlighting()
 " Set the syntax highlighting groups
 function! s:JavaBrowser_Set_Syntax_Highlighting()
-" Highlight the comments
-if has('syntax')
-    syntax match JavaBrowserComment '^" .*'
-
-    " Colors used to highlight the selected tag name
-    highlight clear TagName
-    if has('gui_running') || &t_Co > 2
-        highlight link TagName Search
-    else
-        highlight TagName term=reverse cterm=reverse
-    endif
-
-    " Colors to highlight. These are the defaults. User can change them in
-    " their gvimrc as per their wish
-    highlight link JavaBrowserComment Comment
-    highlight clear JavaBrowserTitle
-    highlight link JavaBrowserTitle Title
-    highlight link JavaBrowserType Type
-    highlight link JavaBrowserId Identifier
-    
-    " Colors for public members
-    highlight link JavaBrowser_public Special
-    highlight JavaBrowser_public ctermfg=green guifg=green
-
-    " Colors for protected members
-    highlight link JavaBrowser_protected Statement
-    highlight JavaBrowser_protected ctermfg=brown guifg=orange
-
-    " Colors for private members
-    highlight link JavaBrowser_private Keyword
-    highlight JavaBrowser_private ctermfg=red guifg=red
-
-    " Colors for public, abstract members
-    highlight link JavaBrowser_public_abstract JavaBrowser_public
-    highlight JavaBrowser_public_abstract ctermfg=green term=italic cterm=italic guifg=green gui=italic
-    
-    " Colors for protected, abstract members
-    highlight link JavaBrowser_protected_abstract JavaBrowser_protected
-    highlight JavaBrowser_protected_abstract ctermfg=brown term=italic cterm=italic guifg=orange gui=italic
-    
-    " Colors for private, abstarct members
-    highlight link JavaBrowser_private_abstract JavaBrowser_private
-    highlight JavaBrowser_private_abstract ctermfg=red term=italic cterm=italic guifg=red gui=italic
-
-    " Colors for public, static members
-    highlight link JavaBrowser_public_static JavaBrowser_public
-    highlight JavaBrowser_public_static ctermfg=green term=underline cterm=underline guifg=green gui=underline
-    
-    " Colors for protected, static members
-    highlight link JavaBrowser_protected_static JavaBrowser_protected
-    highlight JavaBrowser_protected_static ctermfg=brown term=underline cterm=underline guifg=orange gui=underline
-    
-    " Colors for private, static members
-    highlight link JavaBrowser_private_static JavaBrowser_private
-    highlight JavaBrowser_private_static ctermfg=red term=underline cterm=underline guifg=red gui=underline
-
-    " Colors for abstract, static members (with default visibility)
-    highlight link JavaBrowser_abstract_static Normal
-    highlight JavaBrowser_abstract_static term=italic,underline cterm=italic,underline gui=italic,underline
-    
-    " Colors for static members (with default visibility)
-    highlight link JavaBrowser_static Normal
-    highlight JavaBrowser_static term=underline cterm=underline gui=underline
-    
-    " Colors for abstract members (with default visibility)
-    highlight link JavaBrowser_abstract Normal
-    highlight JavaBrowser_abstract term=italic cterm=italic gui=italic
-    
-    " Colors for public, abstract, static members
-    highlight link JavaBrowser_public_abstract_static JavaBrowser_public
-    highlight JavaBrowser_public_abstract_static ctermfg=green term=italic,underline cterm=italic,underline guifg=green gui=italic,underline
-    
-    " Colors for protected, abstract, static members
-    highlight link JavaBrowser_protected_abstract_static JavaBrowser_protected
-    highlight JavaBrowser_protected_abstract_static ctermfg=brown term=italic,underline cterm=italic,underline guifg=orange gui=italic,underline
-    
-    " Colors for private, abstract, static members
-    highlight link JavaBrowser_private_abstract_static JavaBrowser_private
-    highlight JavaBrowser_private_abstract_static ctermfg=red term=italic,underline cterm=italic,underline guifg=red gui=italic,underline
-endif
+  " Highlight the comments
+  if has('syntax')
+      syntax match JavaBrowserComment '^" .*'
+  
+      " Colors used to highlight the selected tag name
+      highlight clear TagName
+      if has('gui_running') || &t_Co > 2
+          highlight link TagName Search
+      else
+          highlight TagName term=reverse cterm=reverse
+      endif
+  
+      " Colors to highlight. These are the defaults. User can change them in
+      " their gvimrc as per their wish
+      highlight link JavaBrowserComment Comment
+      highlight clear JavaBrowserTitle
+      highlight link JavaBrowserTitle Title
+      highlight link JavaBrowserType Type
+      highlight link JavaBrowserId Identifier
+      
+      " Colors for public members
+      highlight link JavaBrowser_public Special
+      highlight JavaBrowser_public ctermfg=darkgreen guifg=darkgreen
+  
+      " Colors for protected members
+      highlight link JavaBrowser_protected Statement
+      highlight JavaBrowser_protected ctermfg=brown guifg=orange
+  
+      " Colors for private members
+      highlight link JavaBrowser_private Keyword
+      highlight JavaBrowser_private ctermfg=red guifg=red
+  
+      " Colors for public, abstract members
+      highlight link JavaBrowser_public_abstract JavaBrowser_public
+      highlight JavaBrowser_public_abstract ctermfg=darkgreen term=italic cterm=italic guifg=darkgreen gui=italic
+      
+      " Colors for protected, abstract members
+      highlight link JavaBrowser_protected_abstract JavaBrowser_protected
+      highlight JavaBrowser_protected_abstract ctermfg=brown term=italic cterm=italic guifg=orange gui=italic
+      
+      " Colors for private, abstarct members
+      highlight link JavaBrowser_private_abstract JavaBrowser_private
+      highlight JavaBrowser_private_abstract ctermfg=red term=italic cterm=italic guifg=red gui=italic
+  
+      " Colors for public, static members
+      highlight link JavaBrowser_public_static JavaBrowser_public
+      highlight JavaBrowser_public_static ctermfg=darkgreen term=underline cterm=underline guifg=darkgreen gui=underline
+      
+      " Colors for protected, static members
+      highlight link JavaBrowser_protected_static JavaBrowser_protected
+      highlight JavaBrowser_protected_static ctermfg=brown term=underline cterm=underline guifg=orange gui=underline
+      
+      " Colors for private, static members
+      highlight link JavaBrowser_private_static JavaBrowser_private
+      highlight JavaBrowser_private_static ctermfg=red term=underline cterm=underline guifg=red gui=underline
+  
+      " Colors for abstract, static members (with default visibility)
+      highlight link JavaBrowser_abstract_static Normal
+      highlight JavaBrowser_abstract_static term=italic,underline cterm=italic,underline gui=italic,underline
+      
+      " Colors for static members (with default visibility)
+      highlight link JavaBrowser_static Normal
+      highlight JavaBrowser_static term=underline cterm=underline gui=underline
+      
+      " Colors for abstract members (with default visibility)
+      highlight link JavaBrowser_abstract Normal
+      highlight JavaBrowser_abstract term=italic cterm=italic gui=italic
+      
+      " Colors for public, abstract, static members
+      highlight link JavaBrowser_public_abstract_static JavaBrowser_public
+      highlight JavaBrowser_public_abstract_static ctermfg=darkgreen term=italic,underline cterm=italic,underline guifg=darkgreen gui=italic,underline
+      
+      " Colors for protected, abstract, static members
+      highlight link JavaBrowser_protected_abstract_static JavaBrowser_protected
+      highlight JavaBrowser_protected_abstract_static ctermfg=brown term=italic,underline cterm=italic,underline guifg=orange gui=italic,underline
+      
+      " Colors for private, abstract, static members
+      highlight link JavaBrowser_private_abstract_static JavaBrowser_private
+      highlight JavaBrowser_private_abstract_static ctermfg=red term=italic,underline cterm=italic,underline guifg=red gui=italic,underline
+  endif
 endfunction
 
 " JavaBrowser_Toggle_Window()
@@ -1707,9 +1578,8 @@ function! s:JavaBrowser_Jump_To_Tag(new_window)
     if foldclosed('.') != -1
         return
     endif
-    let l:varname = 'b:line_no_' . l:lineno
-    if exists(l:varname)
-        let l:bufflineno = b:line_no_{l:lineno}
+    if has_key(b:jbrowser_to_buffer_lno_dict, l:lineno)
+        let l:bufflineno = b:jbrowser_to_buffer_lno_dict[l:lineno]
         
         let winnum = bufwinnr(b:jbrowser_bufnum)
         exe winnum . 'wincmd w'
@@ -1756,9 +1626,9 @@ function! s:JavaBrowser_Show_Tag_Prototype()
 
     let l:lineno = line('.')
     let l:lineno = l:lineno - 1
-    let l:varname = 'b:line_no_' . l:lineno . '_proto'
-    if exists(l:varname)
-        echo b:line_no_{l:lineno}_proto
+    let l:proto = b:protos_dict[l:lineno]
+    if l:proto != ''
+        echo l:proto
     endif
 endfunction
 
@@ -1922,10 +1792,9 @@ function! JavaBrowser_Show_Prototype()
     endif
 
     let l:lineno = v:beval_lnum - 1
-    let l:varname = 'b:line_no_' . l:lineno . '_proto'
-    let l:local_varname = 'line_no_' . l:lineno . '_proto'
-    let l:proto_val = getbufvar(l:bufnum, l:local_varname)
-    return l:proto_val
+    let l:protos_dict = getbufvar(l:bufnum, 'jbrowser_protos_dict')
+    let l:proto = l:protos_dict[l:lineno]
+    return l:proto
 endfunction
 
 " Define the 'JavaBrowser' and user commands to open/close taglist
