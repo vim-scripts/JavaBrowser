@@ -1,9 +1,15 @@
 " File: JavaBrowser.vim
 " Author: Pradeep Unde (pradeep_unde AT yahoo DOT com)
 " Version: 2.0
-" Last Modified: August 29, 2006
+" Last Modified: August 30, 2006
 "
 " ChangeLog:
+" Version 2.01:
+" Following bog fixes and one improvement
+" 1. Fixed error showing tooltip when mouse was over "field" or "method"
+" 2. The cache was not getting set for the tooltip correctly
+" 3. The tooltip was staring with the <TAB> character picked up from the ctags
+"    output. It has been removed now
 " Version 2.0:
 " 1. Overhauled the code for version 7.0
 " 2. Does not give errors for version 7.0 now when browsing the class tree
@@ -941,9 +947,6 @@ function! s:JavaBrowser_Explore_File(bufnum)
         " Run ctags and get the tag list
         let cmd_output = system(ctags_cmd)
 
-        " Cache the ctags output with a buffer local variable
-        "call setbufvar(a:bufnum, 'jbrowser_valid_cache', 'Yes')
-
         " Handle errors
         if v:shell_error && cmd_output != ''
             call s:JavaBrowser_Warning_Msg(cmd_output)
@@ -1050,6 +1053,11 @@ function! s:JavaBrowser_Explore_File(bufnum)
 
             " Add the line number, prototype and visibility for this member
             call add(l:member_details, lnno)
+
+            " Check if the prototype starts with a tab and remove it
+            if stridx(proto, "\t") == 0
+                let proto = strpart(proto, 1)
+            endif
             call add(l:member_details, proto)
 
             " DEBUG messages
@@ -1084,20 +1092,20 @@ function! s:JavaBrowser_Explore_File(bufnum)
             endif
             call add(l:member_details, l:visibility)
         endwhile
-
-        " Cache the processed tags output using buffer local variables
-        call setbufvar(a:bufnum, 'jbrowser_valid_cache', 'Yes')
-        call setbufvar(a:bufnum, 'jbrowser_classes_dict', b:classes_dict)
-        call setbufvar(a:bufnum, 'jbrowser_to_buffer_lno_dict', b:jbrowser_to_buffer_lno_dict)
-        call setbufvar(a:bufnum, 'buffer_to_jbrowser_lno_dict', b:buffer_to_jbrowser_lno_dict)
-        call setbufvar(a:bufnum, 'jbrowser_protos_dict', b:protos_dict)
-        call setbufvar(a:bufnum, 'jbrowser_sort_type', b:jbrowser_sort_type)
-
-        " Cache the protos in JavaBrowser buffer
-        let l:jbrow_bname = '__JBrowser_List__'
-        let l:jbrow_bufnum = bufnr(l:jbrow_bname)
-        call setbufvar(l:jbrow_bufnum, 'jbrowser_protos_dict', b:protos_dict)
     endif
+    
+    " Cache the processed tags output using buffer local variables
+    call setbufvar(a:bufnum, 'jbrowser_valid_cache', 'Yes')
+    call setbufvar(a:bufnum, 'jbrowser_classes_dict', b:classes_dict)
+    call setbufvar(a:bufnum, 'jbrowser_to_buffer_lno_dict', b:jbrowser_to_buffer_lno_dict)
+    call setbufvar(a:bufnum, 'buffer_to_jbrowser_lno_dict', b:buffer_to_jbrowser_lno_dict)
+    call setbufvar(a:bufnum, 'jbrowser_protos_dict', b:protos_dict)
+    call setbufvar(a:bufnum, 'jbrowser_sort_type', b:jbrowser_sort_type)
+
+    " Cache the protos in JavaBrowser buffer
+    let l:jbrow_bname = '__JBrowser_List__'
+    let l:jbrow_bufnum = bufnr(l:jbrow_bname)
+    call setbufvar(l:jbrow_bufnum, 'jbrowser_protos_dict', b:protos_dict)
 
     " Set report option to a huge value to prevent informational messages
     " while adding lines to the taglist window
@@ -1352,7 +1360,7 @@ function! s:JavaBrowser_Toggle_Window(bufnum)
 
     " Check if JavaBrowser is requested for a java file or not
     if &filetype !=# 'java'
-        call s:JavaBrowser_Warning_Msg('File type "' . &filetype . '" not supported. Only supported file types are: "java"')
+        "call s:JavaBrowser_Warning_Msg('File type "' . &filetype . '" not supported. Only supported file types are: "java"')
         return
     endif
 
@@ -1626,9 +1634,11 @@ function! s:JavaBrowser_Show_Tag_Prototype()
 
     let l:lineno = line('.')
     let l:lineno = l:lineno - 1
-    let l:proto = b:protos_dict[l:lineno]
-    if l:proto != ''
-        echo l:proto
+    if has_key(b:protos_dict, l:lineno)
+        let l:proto = b:protos_dict[l:lineno]
+        if l:proto != ''
+            echo l:proto
+        endif
     endif
 endfunction
 
@@ -1793,7 +1803,10 @@ function! JavaBrowser_Show_Prototype()
 
     let l:lineno = v:beval_lnum - 1
     let l:protos_dict = getbufvar(l:bufnum, 'jbrowser_protos_dict')
-    let l:proto = l:protos_dict[l:lineno]
+    let l:proto = ''
+    if has_key(l:protos_dict, l:lineno)
+        let l:proto = l:protos_dict[l:lineno]
+    endif
     return l:proto
 endfunction
 
