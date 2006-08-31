@@ -1,11 +1,15 @@
 " File: JavaBrowser.vim
 " Author: Pradeep Unde (pradeep_unde AT yahoo DOT com)
-" Version: 2.0
-" Last Modified: August 30, 2006
+" Version: 2.02
+" Last Modified: August 31, 2006
 "
 " ChangeLog:
+" Version 2.02:
+" 1. Automatic tag highlighting supported now. Depending where the cursor is in
+"    the java file, corresponding tag is automatically hightlighed in the
+"    JavaBrowser window
 " Version 2.01:
-" Following bog fixes and one improvement
+" Following bug fixes and one improvement
 " 1. Fixed error showing tooltip when mouse was over "field" or "method"
 " 2. The cache was not getting set for the tooltip correctly
 " 3. The tooltip was staring with the <TAB> character picked up from the ctags
@@ -1648,6 +1652,13 @@ endfunction
 function! s:JavaBrowser_Highlight_Tag(buf_no, linenum)
     " Set the syntx highlighting
     call s:JavaBrowser_Set_Syntax_Highlighting()
+    
+    " Check if the line mapping between this buffer and Java Browser window
+    " exists
+    let l:buffer_to_jbrowser_lno_dict = getbufvar(a:buf_no, 'buffer_to_jbrowser_lno_dict')
+    if empty(l:buffer_to_jbrowser_lno_dict)
+        return
+    endif
 
     " JavaBrowser window name
     let l:bname = '__JBrowser_List__'
@@ -1664,67 +1675,34 @@ function! s:JavaBrowser_Highlight_Tag(buf_no, linenum)
     if !exists('b:buf_tag_line_no')
         let b:buf_tag_line_no = -2
     endif
-
-    let l:all_line_nos = b:buf_to_jbrowser_line_nos
+    
     let l:buf_lineno = -1
-    if b:jbrowser_sort_type == 'order'
-        let l:prv_line_no = -1
-        while l:all_line_nos != ''
-            " TODO: CHANGE ******
-            "let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
-            let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "#"))
-            " Remove the line
-            " TODO: CHANGE ******
-            "let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
-            let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "#") + 1)
-            if l:line_no == a:linenum
-                let l:buf_lineno = l:line_no
-                break
-            endif
-            if l:line_no > a:linenum
-                let l:buf_lineno = l:prv_line_no
-                break
-            endif
-            let l:prv_line_no = l:line_no
-        endwhile
-    else
-        let l:nearest_line_offset = -1
-        while l:all_line_nos != ''
-            " TODO: CHANGE ******
-            "let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "\n"))
-            let l:line_no = strpart(l:all_line_nos, 0, stridx(l:all_line_nos, "#"))
-            " Remove the line
-            " TODO: CHANGE ******
-            "let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "\n") + 1)
-            let l:all_line_nos = strpart(l:all_line_nos, stridx(l:all_line_nos, "#") + 1)
-            if l:line_no == a:linenum
-                let l:buf_lineno = l:line_no
-                break
-            endif
-            if l:line_no < a:linenum
-                let l:curr_diff = a:linenum - l:line_no
-                if l:nearest_line_offset == -1 || l:curr_diff < l:nearest_line_offset
-                    let l:nearest_line_offset = l:curr_diff
-                endif
-            endif
-        endwhile
-        if l:buf_lineno == -1
-            let l:buf_lineno = a:linenum - l:nearest_line_offset
+    let l:prv_line_no = -1
+    " Go through the line numbers in order
+    for l:dict_line_no in sort(keys(l:buffer_to_jbrowser_lno_dict), 'JavaBrowser_IntCompare')
+        if l:dict_line_no == a:linenum
+            let l:buf_lineno = l:dict_line_no
+            break
         endif
-    endif
+        if l:dict_line_no > a:linenum
+            let l:buf_lineno = l:prv_line_no
+            break
+        endif
+        let l:prv_line_no = l:dict_line_no
+    endfor
 
+    " Check if could find a matching line number or not
     if l:buf_lineno == -1
         if l:prv_line_no != -1
             let l:buf_lineno = l:prv_line_no
         endif
     endif
     if l:buf_lineno != -1 && l:buf_lineno != b:buf_tag_line_no
-        let l:varname = 'b:buf_to_jbrowser_line_no_' . l:buf_lineno
-        if exists(l:varname)
-            let l:jbrowser_lineno = b:buf_to_jbrowser_line_no_{l:buf_lineno}
+        if has_key(l:buffer_to_jbrowser_lno_dict, l:buf_lineno)
+            let l:jbrowser_lineno = l:buffer_to_jbrowser_lno_dict[l:buf_lineno] + 1
             exe 'normal ' . l:jbrowser_lineno . 'G'
-            
             " Highlight the tagline
+
             call s:JavaBrowser_Highlight_Tagline()
 
             " Store the line number of the current tag
@@ -1809,6 +1787,12 @@ function! JavaBrowser_Show_Prototype()
     endif
     return l:proto
 endfunction
+
+func JavaBrowser_IntCompare(i1, i2)
+    let l:i1 = str2nr(a:i1)
+    let l:i2 = str2nr(a:i2)
+    return l:i1 == l:i2 ? 0 : l:i1 > l:i2 ? 1 : -1
+endfunc
 
 " Define the 'JavaBrowser' and user commands to open/close taglist
 " window
