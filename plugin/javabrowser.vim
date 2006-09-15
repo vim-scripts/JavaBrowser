@@ -1,9 +1,14 @@
 " File: JavaBrowser.vim
 " Author: Pradeep Unde (pradeep_unde AT yahoo DOT com)
-" Version: 2.02
-" Last Modified: August 31, 2006
+" Version: 2.03
+" Last Modified: September 15, 2006
 "
 " ChangeLog:
+" Version 2.03:
+" 2 small bug fixes
+" 1. When UML visibility indicators are enabled, they were also included in
+"    syntax highlighting
+" 2. Sort by order not supported. But the window showed Sort by order at top
 " Version 2.02:
 " 1. Automatic tag highlighting supported now. Depending where the cursor is in
 "    the java file, corresponding tag is automatically hightlighed in the
@@ -774,7 +779,8 @@ function! s:JavaBrowser_Init_Window(bufnum)
 
     if g:JavaBrowser_Compact_Format == 0
         call append(0, '" Press ? for help')
-        call append(1, '" Sorted by ' . b:jbrowser_sort_type)
+        "call append(1, '" Sorted by ' . b:jbrowser_sort_type)
+        call append(1, '" Sorted by name')
         call append(2, '" =' . fnamemodify(filename, ':t') . ' (' . 
                                    \ fnamemodify(filename, ':p:h') . ')')
     endif
@@ -1181,6 +1187,7 @@ function! s:JavaBrowser_Explore_File(bufnum)
                     let l:member_name = strpart(l:member_name, 0, l:override_idx)
                 endif
                 
+                let l:orig_member_name = l:member_name
                 " Show UML visibility notations
                 if g:JavaBrowser_Show_UML_Visibility == 1
                     if stridx(l:proto, 'public') != -1
@@ -1203,7 +1210,7 @@ function! s:JavaBrowser_Explore_File(bufnum)
                     let l:syntaxGrp = l:syntaxGrp . '_' . l:visib
                 endif
                 if has('syntax')
-                    exe 'syntax match ' . l:syntaxGrp . ' /' . l:member_name . '$/'
+                    exe 'syntax match ' . l:syntaxGrp . ' /' . l:orig_member_name . '$/'
                 endif
             endfor
             " create a fold for this tag type
